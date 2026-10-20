@@ -44,7 +44,9 @@ class OutputRulesTest extends \Masterminds\HTML5\Tests\TestCase
     {
         $class = new \ReflectionClass('\Masterminds\HTML5\Serializer\OutputRules');
         $method = $class->getMethod($name);
-        $method->setAccessible(true);
+        if (\PHP_VERSION_ID < 80500) {
+            $method->setAccessible(true);
+        }
 
         return $method;
     }
@@ -382,6 +384,16 @@ class OutputRulesTest extends \Masterminds\HTML5\Tests\TestCase
         $this->assertEquals('foo', stream_get_contents($s, -1, 0));
     }
 
+    public function testWrWithNullNodeValue()
+    {
+        // Namespace nodes with an empty URI (xmlns:w="") can expose a null nodeValue; verify no error on serialization.
+        $this->html5 = $this->getInstance(array('xmlNamespaces' => true));
+        $input = '<!doctype html><html><body><span xmlns:w="" data-x="1"></span></body></html>';
+        $dom = $this->html5->loadHTML($input);
+        $result = $this->html5->saveHTML($dom);
+        $this->assertTrue(false !== strpos($result, 'xmlns:w=""'));
+    }
+
     public function getEncData()
     {
         return array(
@@ -550,9 +562,9 @@ class OutputRulesTest extends \Masterminds\HTML5\Tests\TestCase
         $list = $dom->getElementsByTagName('svg');
         $r->element($list->item(0));
         $contents = stream_get_contents($stream, -1, 0);
-        $this->assertRegExp('|<svg width="150" height="100" viewBox="0 0 3 2">|', $contents);
-        $this->assertRegExp('|<rect width="1" height="2" x="0" fill="#008d46" />|', $contents);
-        $this->assertRegExp('|<rect id="Bar" x="300" y="100" width="300" height="100" fill="rgb\(255,255,0\)">|', $contents);
+        $this->assertMatchesRegularExpression('|<svg width="150" height="100" viewBox="0 0 3 2">|', $contents);
+        $this->assertMatchesRegularExpression('|<rect width="1" height="2" x="0" fill="#008d46" />|', $contents);
+        $this->assertMatchesRegularExpression('|<rect id="Bar" x="300" y="100" width="300" height="100" fill="rgb\(255,255,0\)">|', $contents);
     }
 
     public function testMath()
@@ -579,8 +591,8 @@ class OutputRulesTest extends \Masterminds\HTML5\Tests\TestCase
         $list = $dom->getElementsByTagName('math');
         $r->element($list->item(0));
         $content = stream_get_contents($stream, -1, 0);
-        $this->assertRegExp('|<math>|', $content);
-        $this->assertRegExp('|<csymbol definitionURL="http://www.example.com/mathops/multiops.html#plusminus">|', $content);
+        $this->assertMatchesRegularExpression('|<math>|', $content);
+        $this->assertMatchesRegularExpression('|<csymbol definitionURL="http://www.example.com/mathops/multiops.html#plusminus">|', $content);
     }
 
     public function testProcessorInstruction()
@@ -593,7 +605,7 @@ class OutputRulesTest extends \Masterminds\HTML5\Tests\TestCase
 
         $r->processorInstruction($dom->firstChild);
         $content = stream_get_contents($stream, -1, 0);
-        $this->assertRegExp('|<\?foo bar \?>|', $content);
+        $this->assertMatchesRegularExpression('|<\?foo bar \?>|', $content);
     }
 
     public function testAddressTag()
@@ -618,11 +630,11 @@ class OutputRulesTest extends \Masterminds\HTML5\Tests\TestCase
         $r->element($list->item(0));
         $contents = stream_get_contents($stream, -1, 0);
 
-        $this->assertRegExp('|<address>|', $contents);
-        $this->assertRegExp('|<a href="../People/Raggett/">Dave Raggett</a>,|', $contents);
-        $this->assertRegExp('|<a href="../People/Arnaud/">Arnaud Le Hors</a>,|', $contents);
-        $this->assertRegExp('|contact persons for the <a href="Activity">W3C HTML Activity</a>|', $contents);
-        $this->assertRegExp('|</address>|', $contents);
+        $this->assertMatchesRegularExpression('|<address>|', $contents);
+        $this->assertMatchesRegularExpression('|<a href="../People/Raggett/">Dave Raggett</a>,|', $contents);
+        $this->assertMatchesRegularExpression('|<a href="../People/Arnaud/">Arnaud Le Hors</a>,|', $contents);
+        $this->assertMatchesRegularExpression('|contact persons for the <a href="Activity">W3C HTML Activity</a>|', $contents);
+        $this->assertMatchesRegularExpression('|</address>|', $contents);
     }
 
     /**
@@ -651,5 +663,22 @@ class OutputRulesTest extends \Masterminds\HTML5\Tests\TestCase
         $this->assertTrue(false !== strpos($contents, '<script id="template" type="x-tmpl-mustache">
            <h1>Hello!</h1>
        <p>Bar</p></script>'));
+    }
+
+    public function testSvgAndMathElementsWithoutChildNodesAreHandledAsVoidTags()
+    {
+        $dom = $this->html5->loadHTML(
+            '<!doctype html>
+<html lang="en" id="base">
+    <body>
+       <svg></svg>
+       <math></math>
+    </body>
+</html>');
+
+        $contents = $this->html5->saveHTML($dom);
+
+        self::assertMatchesRegularExpression('|^\h*<svg />$|m', $contents);
+        self::assertMatchesRegularExpression('|^\h*<math />$|m', $contents);
     }
 }

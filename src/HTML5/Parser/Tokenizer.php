@@ -506,7 +506,7 @@ class Tokenizer
         $this->scanner->whitespace();
 
         $val = $this->attributeValue();
-        if ($isValidAttribute) {
+        if ($isValidAttribute && !array_key_exists($name, $attributes)) {
             $attributes[$name] = $val;
         }
 
@@ -1207,6 +1207,10 @@ class Tokenizer
      */
     protected function is_alpha($input)
     {
+        if (!is_string($input) || 1 !== strlen($input)) {
+            return false;
+        }
+
         $code = ord($input);
 
         return ($code >= 97 && $code <= 122) || ($code >= 65 && $code <= 90);
